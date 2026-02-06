@@ -12,78 +12,82 @@ on:
     inputs:
       ssh_enabled:
         type: boolean
-        description: 'Run the build with ssh debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'
+        description: "Run the build with ssh debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)"
         required: false
         default: false
 
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: test-${{ matrix.os }}-${{ matrix.python-version}}
+    runs-on: ${{ matrix.os }}
+    env:
+      SPY_WERROR: true
 
     strategy:
+      fail-fast: false
       matrix:
-        python-version: [3.12]
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.12"]
 
     steps:
-    - name: Setup tmate session
-      uses: mxschmitt/action-tmate@v3
-      with:
-        detached: true
-      if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        with:
+          detached: true
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
 
-    - name: Checkout repository
-      uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
-    - name: Install apt packages
-      uses: tecolicom/actions-use-apt-tools@v1
-      with:
-        # expect provides "unbuffer"
-        tools: expect
-        method: timestamp
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
 
-    - name: Install wasi-sdk
-      run: |
-        cd
-        WASI_OS=linux
-        WASI_ARCH=x86_64
-        WASI_VERSION=24
-        WASI_VERSION_FULL=${WASI_VERSION}.0
-        WASI_FILENAME=wasi-sdk-${WASI_VERSION_FULL}-${WASI_ARCH}-${WASI_OS}
-        wget -q https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/${WASI_FILENAME}.tar.gz
-        tar xf ${WASI_FILENAME}.tar.gz
-        $PWD/${WASI_FILENAME}/bin/clang --version
-        echo "$PWD/${WASI_FILENAME}/bin" >> $GITHUB_PATH
+      - name: Display versions
+        run: |
+          echo PATH="$PATH"
+          echo
+          echo python && python --version && echo
+          echo pip && pip --version && echo
+          echo clang && clang --version && echo
+          echo gcc && gcc --version && echo
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-        cache: 'pip'
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
 
-    - name: Display versions
-      run: |
-        echo PATH="$PATH"
-        echo
-        echo python && python --version && echo
-        echo pip && pip --version && echo
-        echo clang && clang --version && echo
-        echo gcc && gcc --version && echo
+      - name: Linter
+        run: |
+          ruff check .
 
-    - name: Install project
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e .
+      - name: Format check
+        run: |
+          ruff format --check . --extension spy:python
 
-    - name: Build libspy
-      run: |
-        cd spy/libspy
-        make
+      - name: Build libspy
+        run: |
+          cd spy/libspy
+          make
 
-    - name: Run tests
-      run: |
-        pytest -m "not mypy"
+      - name: Run tests
+        run: |
+          pip install pytest-xdist
+          pytest -n auto -m "not mypy" --junit-xml=test-results.xml
 
-    - name: Run mypy
-      run: |
-        mypy
+      - name: Run mypy
+        run: |
+          mypy
+
+      - name: Surface failing tests
+        if: always()
+        uses: pmeier/pytest-results-action@main
+        with:
+          path: test-results.xml
+          summary: true
+          display-options: fEX
+          fail-on-empty: true
+          title: Test results
