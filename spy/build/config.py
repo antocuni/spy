@@ -7,6 +7,7 @@ import spy.libspy
 BuildTarget = Literal["native", "wasi", "emscripten"]
 OutputKind = Literal["exe", "lib", "py-cffi"]
 BuildType = Literal["release", "debug"]
+GCOption = Literal["none", "bdwgc"]
 
 
 @dataclass
@@ -16,6 +17,8 @@ class BuildConfig:
     build_type: BuildType
     opt_level: Optional[int] = None
     warning_as_error: bool = False
+    gc: GCOption = "none"
+    static: bool = False
 
 
 # ======= CFLAGS and LDFLAGS logic =======
@@ -65,6 +68,22 @@ class CompilerConfig:
             "-L", str(libdir),
             "-lspy",
         ]  # fmt: skip
+
+        # GC flags
+        if config.gc == "bdwgc":
+            deps_dir = spy.libspy.DEPS.join("build", config.target)
+            self.cflags += [
+                "-DSPY_GC_BDWGC",
+                "-I", str(deps_dir.join("include")),
+            ]
+            self.ldflags += [
+                "-L", str(deps_dir.join("lib")),
+                "-lgc",
+            ]
+
+        # Static linking
+        if config.static:
+            self.ldflags += ["-static"]
 
         if config.warning_as_error or getenv("SPY_WERROR") in ("true", "1"):
             self.cflags += WARNING_AS_ERROR_CFLAGS

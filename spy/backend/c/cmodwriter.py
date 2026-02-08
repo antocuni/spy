@@ -155,6 +155,7 @@ class CModuleWriter:
         if self.is_main_mod and fqn_main in self.ctx.vm.globals_w:
             self.tbc.wb(f"""
                 int main(void) {{
+                    spy_gc_init();
                     {fqn_main.c_name}();
                     return 0;
                 }}

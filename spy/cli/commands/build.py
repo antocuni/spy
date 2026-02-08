@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import (
     Annotated,
+    Literal,
     Optional,
 )
 
@@ -12,7 +13,8 @@ from typer import Option
 
 from spy.analyze.importing import ImportAnalyzer
 from spy.backend.c.cbackend import CBackend
-from spy.build.config import BuildConfig, BuildTarget, OutputKind
+from spy.build.config import BuildConfig, BuildTarget, GCOption, OutputKind
+from spy.build.deps import ensure_deps
 from spy.cli._runners import init_vm, nullcontext, timer
 from spy.cli.commands.shared_args import (
     Base_Args,
@@ -20,6 +22,8 @@ from spy.cli.commands.shared_args import (
     _execute_flag,
     _execute_options,
 )
+
+GCCliOption = Literal["auto", "none", "bdwgc"]
 
 
 @dataclass
@@ -89,11 +93,36 @@ class _build_mixin:
         ),
     ] = "exe"
 
+    static: Annotated[
+        bool,
+        Option("--static", help="Produce a statically linked executable"),
+    ] = False
+
+    gc: Annotated[
+        GCCliOption,
+        Option(
+            "--gc",
+            help="Garbage collector to use (auto selects bdwgc for native targets)",
+            click_type=click.Choice(["auto", "none", "bdwgc"]),
+        ),
+    ] = "auto"
+
 
 @dataclass
 class Build_Args(
     Base_Args, _build_mixin, _execute_flag, _execute_options, Filename_Required_Args
 ): ...
+
+
+def resolve_gc(args: Build_Args) -> GCOption:
+    if args.gc == "auto":
+        if args.target == "native":
+            return "bdwgc"
+        else:
+            return "none"
+    else:
+        gc: GCOption = args.gc  # type: ignore[assignment]
+        return gc
 
 
 async def build(args: Build_Args) -> None:
@@ -108,12 +137,18 @@ async def build(args: Build_Args) -> None:
     vm.ast_color_map = {}
     vm.redshift(error_mode=args.error_mode)
 
+    gc = resolve_gc(args)
+
     config = BuildConfig(
         target=args.target,
         kind=args.output_kind,
         build_type="release" if args.release_mode else "debug",
         warning_as_error=args.warning_as_error,
+        gc=gc,
+        static=args.static,
     )
+
+    ensure_deps(config)
 
     cwd = py.path.local(".")
     build_dir = get_build_dir(args)
