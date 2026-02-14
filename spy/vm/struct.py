@@ -60,8 +60,38 @@ class W_StructType(W_Type):
 
         super().define(W_Struct, dict_w)
 
+    def define_from_fields(self, fields: list[tuple[str, W_Type]]) -> None:
+        """
+        Programmatically define a struct type from interp-level code.
+
+        fields is a list of (name, w_type) pairs, e.g.:
+            [("x", B.w_i32), ("y", B.w_i32)]
+
+        The __make__ function is NOT registered as a global here. Instead,
+        it's stored in self._pending_globals and must be registered later
+        (e.g., by ModuleRegistry.struct_type via make_module).
+        """
+        fields_w = {name: W_Field(name, w_T) for name, w_T in fields}
+        struct_fields_w, size = calc_layout(fields_w)
+        self.size = size
+
+        dict_w: dict[str, W_Object] = {}
+        for w_struct_field in struct_fields_w:
+            dict_w[w_struct_field.name] = w_struct_field
+
+        w_make = self._create_w_make(None, struct_fields_w, register=False)
+        dict_w["__make__"] = W_StaticMethod(w_make)
+        dict_w["__new__"] = w_make
+
+        self.spy_key_is_valid = True
+        super().define(W_Struct, dict_w)
+
     def _create_w_make(
-        self, vm: "SPyVM", struct_fields_w: list["W_StructField"]
+        self,
+        vm: Optional["SPyVM"],
+        struct_fields_w: list["W_StructField"],
+        *,
+        register: bool = True,
     ) -> W_BuiltinFunc:
         """
         Generate the '__make__' staticmethod.
@@ -80,6 +110,9 @@ class W_StructType(W_Type):
 
                 # if the use doesn't specify a __new__, by default we use __make__
                 __new__ = __make__
+
+        If register=False, the function is not registered as a global;
+        instead it's stored in self._pending_globals for later registration.
         """
         STRUCT = Annotated[W_Struct, self]
         # functype
@@ -97,7 +130,12 @@ class W_StructType(W_Type):
         # create the actual function object
         fqn = self.fqn.join("__make__")
         w_make = W_BuiltinFunc(w_functype, fqn, w_make_impl)
-        vm.add_global(fqn, w_make, irtag=IRTag("struct.make"))
+        if register:
+            vm.add_global(fqn, w_make, irtag=IRTag("struct.make"))
+        else:
+            if not hasattr(self, "_pending_globals"):
+                self._pending_globals: list[tuple[FQN, W_Object, IRTag]] = []
+            self._pending_globals.append((fqn, w_make, IRTag("struct.make")))
         return w_make
 
     def repr_hints(self) -> list[str]:

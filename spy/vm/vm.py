@@ -219,12 +219,20 @@ class SPyVM:
         self.globals_w[w_mod.fqn] = w_mod
 
     def make_module(self, reg: ModuleRegistry) -> None:
+        from spy.vm.struct import W_StructType
+
         w_mod = W_Module(reg.fqn.modname, None)
         self.register_module(w_mod)
         for fqn, w_obj in reg.content:
             # 1.register w_obj as a global constant
             self.add_global(fqn, w_obj)
-            # 2. add it to the actual module
+            # 2. also register pending globals from struct types (e.g. __make__)
+            if isinstance(w_obj, W_StructType):
+                for sub_fqn, sub_obj, irtag in getattr(
+                    w_obj, "_pending_globals", []
+                ):
+                    self.add_global(sub_fqn, sub_obj, irtag=irtag)
+            # 3. add it to the actual module
             assert len(fqn.parts) == 2
             assert fqn.modname == reg.fqn.modname
             name = fqn.symbol_name

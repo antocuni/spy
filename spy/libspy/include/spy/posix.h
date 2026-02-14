@@ -6,14 +6,18 @@
 #endif
 #include <unistd.h>
 
-typedef struct {
+#ifndef SPY_STRUCT_posix_TerminalSize_DEFINED
+#define SPY_STRUCT_posix_TerminalSize_DEFINED
+typedef struct spy_posix$TerminalSize spy_posix$TerminalSize;
+struct spy_posix$TerminalSize {
     int32_t columns;
     int32_t lines;
-} spy_TerminalSize;
+};
+#endif
 
-static inline spy_TerminalSize
+static inline spy_posix$TerminalSize
 spy_posix$get_terminal_size(void) {
-    spy_TerminalSize result;
+    spy_posix$TerminalSize result;
 
 #ifndef SPY_TARGET_WASI
     struct winsize w;
@@ -31,16 +35,6 @@ spy_posix$get_terminal_size(void) {
 #endif
 
     return result;
-}
-
-static inline int32_t
-spy_posix$TerminalSize$__get_columns__(spy_TerminalSize self) {
-    return self.columns;
-}
-
-static inline int32_t
-spy_posix$TerminalSize$__get_lines__(spy_TerminalSize self) {
-    return self.lines;
 }
 
 #endif /* SPY_POSIX_H */

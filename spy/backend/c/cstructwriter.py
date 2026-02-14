@@ -117,18 +117,28 @@ class CStructWriter:
             return
 
         c_st = C_Type(w_st.fqn.c_name)
+
+        # Use #ifndef guards to avoid duplicate definitions: builtin modules
+        # may already define the struct in their library header (e.g. posix.h)
+        guard = f"SPY_STRUCT_{w_st.fqn.c_name_plain.replace('$', '_')}_DEFINED"
+        self.tbh_fwdecl.wl(f"#ifndef {guard}")
         self.tbh_fwdecl.wl(f"typedef struct {c_st} {c_st}; /* {w_st.fqn.human_name} */")
+        self.tbh_fwdecl.wl(f"#endif")
+
         # XXX this is VERY wrong: it assumes that the standard C layout
         # matches the layout computed by struct.calc_layout: as long as we use
         # only 32-bit types it should work, but eventually we need to do it
         # properly.
         tb = self.tbh_structs
+        tb.wl(f"#ifndef {guard}")
+        tb.wl(f"#define {guard}")
         tb.wl("struct %s {" % c_st)
         with tb.indent():
             for w_field in w_st.iterfields_w():
                 c_fieldtype = self.ctx.w2c(w_field.w_T)
                 tb.wl(f"{c_fieldtype} {w_field.name};")
         tb.wl("};")
+        tb.wl(f"#endif /* {guard} */")
         tb.wl("")
 
     def emit_PtrType(self, fqn: FQN, w_ptrtype: W_PtrType) -> None:

@@ -8,6 +8,8 @@ from spy.location import Loc
 if TYPE_CHECKING:
     from spy.vm.function import W_BuiltinFunc
     from spy.vm.object import W_Object, W_Type
+    from spy.vm.struct import W_StructType
+    from spy.vm.vm import SPyVM
 
 
 class ModuleRegistry:
@@ -89,6 +91,25 @@ class ModuleRegistry:
             return W_class
 
         return decorator
+
+    def struct_type(
+        self,
+        typename: str,
+        fields: list[tuple[str, "W_Type"]],
+    ) -> "W_StructType":
+        """
+        Programmatically create and register a struct type on the module.
+
+        fields is a list of (name, w_type) pairs, e.g.:
+            [("x", B.w_i32), ("y", B.w_i32)]
+        """
+        from spy.vm.struct import W_StructType
+
+        fqn = self.fqn.join(typename)
+        w_st = W_StructType.declare(fqn)
+        w_st.define_from_fields(fields)
+        self.add(typename, w_st)
+        return w_st
 
     def builtin_func(
         self,

@@ -1,6 +1,7 @@
 import pytest
 
 from spy.tests.support import CompilerTest, expect_errors, no_C, only_interp
+from spy.vm.b import B
 from spy.vm.builtin import builtin_method
 from spy.vm.opspec import W_MetaArg, W_OpSpec
 from spy.vm.primitive import W_I32, W_Dynamic
@@ -180,3 +181,21 @@ class TestBuiltins(CompilerTest):
         dm = mod.dir_math()
         assert "acos" in dm
         assert "pi" in dm
+
+    def test_interp_level_struct(self):
+        EXT = ModuleRegistry("ext")
+        EXT.struct_type("MyPoint", [
+            ("x", B.w_i32),
+            ("y", B.w_i32),
+        ])
+        self.vm.make_module(EXT)
+        src = """
+        from ext import MyPoint
+
+        def foo(x: i32, y: i32) -> i32:
+            p = MyPoint(x, y)
+            return p.x + p.y
+        """
+        mod = self.compile(src)
+        assert mod.foo(3, 4) == 7
+        assert mod.foo(10, 20) == 30
