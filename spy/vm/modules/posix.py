@@ -4,7 +4,6 @@ SPy `posix` module.
 
 from typing import TYPE_CHECKING, Annotated
 
-from spy.vm.b import B
 from spy.vm.primitive import W_I32
 from spy.vm.registry import ModuleRegistry
 from spy.vm.struct import W_Struct
@@ -14,10 +13,12 @@ if TYPE_CHECKING:
 
 POSIX = ModuleRegistry("posix")
 
-POSIX.struct_type("TerminalSize", [
-    ("columns", B.w_i32),
-    ("lines", B.w_i32),
-])
+
+@POSIX.builtin_struct
+class W_TerminalSize:
+    columns: W_I32
+    lines: W_I32
+
 
 W_TerminalSize = Annotated[W_Struct, POSIX.w_TerminalSize]
 

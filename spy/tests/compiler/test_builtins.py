@@ -184,10 +184,12 @@ class TestBuiltins(CompilerTest):
 
     def test_interp_level_struct(self):
         EXT = ModuleRegistry("ext")
-        EXT.struct_type("MyPoint", [
-            ("x", B.w_i32),
-            ("y", B.w_i32),
-        ])
+
+        @EXT.builtin_struct
+        class W_MyPoint:
+            x: W_I32
+            y: W_I32
+
         self.vm.make_module(EXT)
         src = """
         from ext import MyPoint

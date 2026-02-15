@@ -111,6 +111,29 @@ class ModuleRegistry:
         self.add(typename, w_st)
         return w_st
 
+    def builtin_struct(self, pyclass: type) -> "W_StructType":
+        """
+        Decorator to create a struct type from a class with annotations.
+
+        Usage:
+            @MOD.builtin_struct
+            class W_MyPoint:
+                x: W_I32
+                y: W_I32
+
+        The class name is used as the struct type name, stripping the 'W_'
+        prefix if present. Annotations are converted to SPy types via
+        to_spy_type.
+        """
+        from spy.vm.builtin import to_spy_type
+
+        typename = pyclass.__name__
+        if typename.startswith("W_"):
+            typename = typename[2:]
+        annotations = pyclass.__annotations__
+        fields = [(name, to_spy_type(ann)) for name, ann in annotations.items()]
+        return self.struct_type(typename, fields)
+
     def builtin_func(
         self,
         pyfunc_or_funcname: Callable | str | None = None,
